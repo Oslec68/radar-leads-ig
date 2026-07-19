@@ -1,0 +1,33 @@
+name: Radar de Leads IG
+
+on:
+  schedule:
+    - cron: "0 5 * * *"   # todo dia as 05:00 UTC (~02:00 horario de Brasilia)
+  workflow_dispatch: {}     # permite rodar manualmente pelo botao "Run workflow"
+
+jobs:
+  raspar-leads:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Baixar codigo do repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Rodar radar de leads
+        env:
+          IG_USERNAME: ${{ secrets.IG_USERNAME }}
+          IG_PASSWORD: ${{ secrets.IG_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          GOOGLE_SHEETS_CREDS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDS_JSON }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+        run: python radar_leads.py
