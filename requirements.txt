@@ -1,0 +1,4 @@
+instagrapi==2.1.2
+supabase==2.9.0
+gspread==6.1.2
+google-auth==2.35.0
