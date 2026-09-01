@@ -3,7 +3,7 @@ name: Radar de Leads IG
 on:
   schedule:
     - cron: "0 5 * * *"   # todo dia as 05:00 UTC (~02:00 horario de Brasilia)
-  workflow_dispatch: {}     # permite rodar manualmente pelo botao "Run workflow"
+  workflow_dispatch: {}
 
 jobs:
   raspar-leads:
@@ -26,8 +26,13 @@ jobs:
         env:
           IG_USERNAME: ${{ secrets.IG_USERNAME }}
           IG_PASSWORD: ${{ secrets.IG_PASSWORD }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          GOOGLE_SHEETS_CREDS_JSON: ${{ secrets.GOOGLE_SHEETS_CREDS_JSON }}
-          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
         run: python radar_leads.py
+
+      - name: Disponibilizar planilha de leads
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: leads-instagram-${{ github.run_number }}-${{ github.run_attempt }}
+          path: leads.csv
+          retention-days: 30
+          if-no-files-found: error
