@@ -17,6 +17,10 @@ import re
 import sys
 import time
 import unicodedata
+import xml.etree.ElementTree as ET
+from urllib.parse import quote_plus, urlparse
+
+import requests
 from datetime import datetime, timezone
 
 from instagrapi import Client
@@ -332,6 +336,87 @@ def salvar_csv(leads: list[dict]):
     log.info("%s criado com %s leads B2B unicos", ARQUIVO_CSV, len(ordenados))
 
 
+
+BUSCAS_PUBLICAS = [
+    "site:instagram.com supermercado Campinas SP",
+    "site:instagram.com mercado Vinhedo SP",
+    "site:instagram.com distribuidora bebidas São Paulo",
+    "site:instagram.com empório produtos naturais São Paulo",
+    "site:instagram.com loja suplementos Campinas",
+    "site:instagram.com academia Campinas SP",
+    "site:instagram.com farmácia drogaria interior São Paulo",
+    "site:instagram.com restaurante cafeteria Campinas SP",
+]
+
+
+def coletar_via_busca_publica() -> list[dict]:
+    log.warning("Login limitado pelo Instagram; ativando busca publica de perfis comerciais")
+    leads = []
+    vistos = set()
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; RadarCPComercial/1.0)"}
+
+    for consulta in BUSCAS_PUBLICAS:
+        try:
+            url = "https://www.bing.com/search?format=rss&q=" + quote_plus(consulta)
+            resposta = requests.get(url, headers=headers, timeout=20)
+            resposta.raise_for_status()
+            raiz = ET.fromstring(resposta.content)
+        except Exception as erro:
+            log.warning("Busca publica indisponivel para uma consulta: %s", causa_raiz(erro))
+            continue
+
+        for item in raiz.findall(".//item"):
+            titulo = item.findtext("title", default="")
+            descricao = item.findtext("description", default="")
+            link = item.findtext("link", default="")
+            texto = normalizar(f"{titulo} {descricao} {link}")
+            if "instagram.com" not in texto:
+                continue
+
+            match = re.search(r"instagram\\.com/([A-Za-z0-9._]+)", link)
+            if not match:
+                match = re.search(r"instagram\\.com/([A-Za-z0-9._]+)", descricao)
+            if not match:
+                continue
+            username = match.group(1).strip(".")
+            if username.lower() in {"p", "reel", "reels", "explore", "stories"} or username in vistos:
+                continue
+
+            pseudo = type("PerfilPublico", (), {
+                "is_private": False,
+                "full_name": titulo,
+                "biography": descricao,
+                "category": "Empresa",
+                "city_name": "SP" if " sp" in f" {texto}" or "sao paulo" in texto else "",
+                "external_url": link,
+                "is_business": True,
+            })()
+            email, telefone = extrair_contato(pseudo)
+            qualificacao = qualificar_perfil(pseudo, email, telefone)
+            if not qualificacao:
+                continue
+
+            vistos.add(username)
+            leads.append({
+                **qualificacao,
+                "username": username,
+                "nome": titulo,
+                "bio": re.sub(r"<[^>]+>", " ", descricao),
+                "seguidores": 0,
+                "verificado": False,
+                "categoria_ig": "Empresa encontrada em busca publica",
+                "email": email,
+                "telefone": telefone,
+                "url_perfil": f"https://instagram.com/{username}",
+                "hashtag_origem": "busca_publica",
+                "coletado_em": datetime.now(timezone.utc).isoformat(),
+            })
+        time.sleep(random.uniform(2, 4))
+
+    log.info("Busca publica concluida: %s leads encontrados", len(leads))
+    return leads
+
+
 def main() -> int:
     log.info("=== Iniciando Radar de Leads B2B ===")
     criar_csv_vazio()
@@ -339,11 +424,13 @@ def main() -> int:
     try:
         cl = get_instagram_client()
     except Exception as erro:
-        log.error(
-            "Falha segura no login do Instagram (%s). "
-            "Confira bloqueio temporario e os secrets IG_USERNAME/IG_PASSWORD.",
-            causa_raiz(erro),
-        )
+        log.warning("Login do Instagram indisponivel (%s)", causa_raiz(erro))
+        leads_publicos = coletar_via_busca_publica()
+        salvar_csv(leads_publicos)
+        if leads_publicos:
+            log.info("=== Concluido pelo modo publico: %s leads ===", len(leads_publicos))
+            return 0
+        log.error("Nenhum lead foi obtido pelo Instagram nem pela busca publica")
         return 1
 
     todos_os_leads = []
