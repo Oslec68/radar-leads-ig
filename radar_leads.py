@@ -36,9 +36,9 @@ HASHTAGS = [
     "bebidasfuncionaiscomfibra",
 ]
 
-CONTAS_POR_HASHTAG = 60
-INTERVALO_ENTRE_ACOES = (3, 8)
-SESSION_FILE = "ig_session.json"
+CONTAS_POR_HASHTAG = 25
+INTERVALO_ENTRE_ACOES = (3, 6)
+SESSION_FILE = os.path.join(".cache", "ig_session.json")
 ARQUIVO_CSV = "leads.csv"
 PONTUACAO_MINIMA = 3
 
@@ -125,15 +125,16 @@ def criar_csv_vazio():
 
 def get_instagram_client() -> Client:
     validar_configuracao()
+    os.makedirs(os.path.dirname(SESSION_FILE), exist_ok=True)
     cl = Client()
     cl.delay_range = INTERVALO_ENTRE_ACOES
 
     if os.path.exists(SESSION_FILE):
         try:
-            cl.load_settings(SESSION_FILE)
+            settings = cl.load_settings(SESSION_FILE)
+            cl.set_settings(settings)
             cl.login(os.environ["IG_USERNAME"], os.environ["IG_PASSWORD"])
-            cl.get_timeline_feed()
-            log.info("Sessao anterior do Instagram reutilizada")
+            log.info("Sessao persistente do Instagram reutilizada")
         except (LoginRequired, ClientError):
             log.info("Sessao anterior expirada; renovando login")
             cl = Client()
