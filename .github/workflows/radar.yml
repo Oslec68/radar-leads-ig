@@ -2,12 +2,6 @@
 name: Radar de Leads IG
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "radar_leads.py"
-  schedule:
-    - cron: "0 5 * * *"   # todo dia as 05:00 UTC (~02:00 horario de Brasilia)
   workflow_dispatch: {}
 
 concurrency:
