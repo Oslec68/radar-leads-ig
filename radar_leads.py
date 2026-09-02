@@ -112,6 +112,30 @@ def normalizar(texto) -> str:
     )
 
 
+def causa_raiz(erro: Exception) -> str:
+    atual = erro
+    vistos = set()
+    for _ in range(5):
+        if id(atual) in vistos:
+            break
+        vistos.add(id(atual))
+        ultimo = getattr(atual, "last_attempt", None)
+        if ultimo is not None:
+            try:
+                interno = ultimo.exception()
+                if interno is not None:
+                    atual = interno
+                    continue
+            except Exception:
+                pass
+        proximo = getattr(atual, "__cause__", None) or getattr(atual, "__context__", None)
+        if proximo is None:
+            break
+        atual = proximo
+    detalhe = re.sub(r"https?://\\S+", "[URL]", str(atual or ""))
+    return f"{type(atual).__name__}: {detalhe[:300]}"
+
+
 def validar_configuracao():
     ausentes = [nome for nome in ("IG_USERNAME", "IG_PASSWORD") if not os.getenv(nome)]
     if ausentes:
@@ -318,7 +342,7 @@ def main() -> int:
         log.error(
             "Falha segura no login do Instagram (%s). "
             "Confira bloqueio temporario e os secrets IG_USERNAME/IG_PASSWORD.",
-            type(erro).__name__,
+            causa_raiz(erro),
         )
         return 1
 
